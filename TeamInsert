@@ -1,0 +1,33 @@
+CREATE PROCEDURE TeamInsert
+AS
+
+	IF EXISTS (SELECT * FROM sys.tables WHERE Name = 'TeamInsert')
+	DROP TABLE #TeamInsert;
+
+	CREATE TABLE #TeamInsert
+		(Name NVARCHAR(255) COLLATE SQL_Latin1_General_CP1_CI_AS, 
+		Abbreviation VARCHAR(100) COLLATE SQL_Latin1_General_CP1_CI_AS, 
+		Code VARCHAR(100)COLLATE SQL_Latin1_General_CP1_CI_AS);
+
+	BULK INSERT #TeamInsert
+	FROM 'C:\FPL Database\Data Files\23-24 Teams.csv'
+	WITH (FORMATFILE = 'C:\FPL Database\Data Files\TeamFormatFile.xml',
+		CODEPAGE = 65001);
+
+
+	INSERT INTO PLTeams
+		(Name, 
+		Abbreviation, 
+		Code)
+	SELECT
+		[ti].Name,
+		[ti].Abbreviation,
+		[ti].Code
+	FROM 
+		#TeamInsert [ti]
+	WHERE
+		[ti].Name NOT IN (SELECT Name FROM PLTeams) AND
+		[ti].Abbreviation NOT IN (SELECT Abbreviation FROM PLTeams) AND
+		[ti].Code NOT IN (SELECT Code FROM PLTeams)
+	SELECT * FROM PLTeams 
+	DROP TABLE #TeamInsert
