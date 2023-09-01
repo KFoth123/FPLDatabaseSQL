@@ -1,0 +1,50 @@
+CREATE PROCEDURE PlayerInsert
+AS
+IF EXISTS (SELECT * FROM sys.tables WHERE Name = '#PlayerInsert')
+	DROP TABLE #PlayerInsert
+
+	CREATE TABLE #PlayerInsert
+		(Name NVARCHAR(255) COLLATE Latin1_General_100_CI_AS_SC_UTF8, 
+		TeamCode INT,
+		Position VARCHAR(100) COLLATE SQL_Latin1_General_CP1_CI_AS,
+		Code INT)
+
+	BULK INSERT #PlayerInsert
+	FROM 'C:\FPL Database\Data Files\23-24 Players.csv'
+	WITH (FORMATFILE = 'C:\FPL Database\Data Files\PlayerFormatFile.xml',
+		CODEPAGE = 65001,
+		DATAFILETYPE = 'widenative')
+	
+		INSERT INTO Players 
+			(Name, 
+			PLTeamId, 
+			Position,
+			ExternalCode)
+		SELECT
+			[pi].Name,
+			t.PLTeamId,
+			[pi].Position,
+			[pi].Code
+		FROM 
+			#PlayerInsert [pi]
+				JOIN PLTeams [t] ON [pi].TeamCode = t.Code
+		WHERE 
+			[pi].Code NOT IN (SELECT ExternalCode FROM Players)
+
+
+		UPDATE 
+			Players
+		SET 
+			Name = [pi].Name,
+			PLTeamId = plt.PLTeamId,
+			Position = [pi].Position
+		FROM
+			Players pl
+				JOIN #PlayerInsert [pi] ON pl.ExternalCode = [pi].Code
+					JOIN PLTeams plt ON [pi].TeamCode = plt.Code
+		WHERE 
+			[pi].Code IN (SELECT ExternalCode FROM Players)
+
+
+	SELECT t.Name,* FROM Players pl JOIN PLTeams t ON pl.PLTeamId = t.PLTeamId 
+	DROP TABLE #PlayerInsert
