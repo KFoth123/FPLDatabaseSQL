@@ -1,0 +1,57 @@
+CREATE TRIGGER [dbo].[TeamTotalPoints] ON [dbo].[TeamGW]
+AFTER INSERT,UPDATE,DELETE
+AS
+BEGIN
+	SET NOCOUNT ON
+		IF EXISTS (SELECT * FROM Inserted) AND NOT EXISTS (SELECT * FROM Deleted)
+			BEGIN
+				UPDATE
+					FPLTeams
+				SET
+					TotalPoints = 
+					(SELECT
+						SUM(GameWeekPoints - TransferCosts)
+					FROM
+						TeamGW
+					WHERE 
+						TeamGW.FPLTeamId = FPLTeams.FPLTeamId
+					GROUP BY
+						TeamGW.FPLTeamId)
+				WHERE	
+					FPLTeams.FPLTeamId IN (SELECT FPLTeamId FROM TeamGW)
+			END
+		IF EXISTS (SELECT * FROM Inserted) AND EXISTS (SELECT * FROM Deleted)
+			BEGIN
+				UPDATE
+					FPLTeams
+				SET
+					TotalPoints = 
+					(SELECT
+						SUM(GameWeekPoints - TransferCosts)
+					FROM
+						TeamGW
+					WHERE 
+						TeamGW.FPLTeamId = FPLTeams.FPLTeamId
+					GROUP BY
+						TeamGW.FPLTeamId)
+				WHERE	
+					FPLTeams.FPLTeamId IN (SELECT FPLTeamId FROM TeamGW)
+			END
+		IF NOT EXISTS (SELECT * FROM Inserted) AND EXISTS (SELECT * FROM Deleted)
+			BEGIN
+				UPDATE
+					FPLTeams
+				SET
+					TotalPoints = 
+					(SELECT
+						SUM(GameWeekPoints - TransferCosts)
+					FROM
+						TeamGW
+					WHERE 
+						TeamGW.FPLTeamId = FPLTeams.FPLTeamId
+					GROUP BY
+						TeamGW.FPLTeamId)
+				WHERE	
+					FPLTeams.FPLTeamId IN (SELECT FPLTeamId FROM TeamGW)
+			END
+END
