@@ -1,0 +1,49 @@
+CREATE PROCEDURE FPLTeamInsert
+AS
+IF EXISTS (SELECT * FROM sys.tables WHERE name = '#FPLTeamInsert')
+	DROP TABLE #FPLTeamInsert
+	--Create Temporary Table for FPL Team Insert
+	CREATE TABLE #FPLTeamInsert
+		(Season VARCHAR (10) COLLATE SQL_Latin1_General_CP1_CI_AS
+		,Name NVARCHAR (30) COLLATE Latin1_General_100_CI_AS_SC_UTF8
+		,Manager NVARCHAR (100) COLLATE Latin1_General_100_CI_AS_SC_UTF8
+		,ExternalCode INT)
+
+	BULK INSERT #FPLTeamInsert
+	FROM 'C:\FPL Database\Data Files\LeagueTeams.csv'
+		WITH (FORMATFILE = 'C:\FPL Database\Data Files\LeagueFormatFile.xml',
+		CODEPAGE = '65001',
+		DATAFILETYPE = 'widenative')
+
+		--Insert new teams
+		INSERT INTO
+			FPLTeams
+				(Season
+				,Name
+				,Manager
+				,ExternalCode)
+			SELECT
+				ti.Season
+				,ti.Name
+				,ti.Manager
+				,ti.ExternalCode
+			FROM
+				#FPLTeamInsert ti
+			WHERE
+				ti.ExternalCode NOT IN (SELECT ExternalCode FROM FPLTeams)
+
+		--Update existing teams with new names
+		UPDATE 
+			FPLTeams
+		SET 
+			Name = ti.Name
+		FROM 
+			#FPLTeamInsert ti
+				JOIN FPLTeams fpl ON ti.ExternalCode = fpl.ExternalCode
+		WHERE 
+			ti.ExternalCode IN (SELECT ExternalCode FROM FPLTeams)
+
+		--Select out new team results
+		SELECT * FROM FPLTeams
+		--Drop temporary table
+		DROP TABLE #FPLTeamInsert
