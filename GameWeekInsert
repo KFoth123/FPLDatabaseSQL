@@ -1,0 +1,73 @@
+CREATE PROCEDURE FPLTeamInsert
+AS
+	IF EXISTS (SELECT * FROM sys.tables WHERE Name = '#GameWeekInsert')
+	DROP TABLE #GameWeekInsert
+	--Create Temporary Table from GameWeek file
+	CREATE TABLE #GameWeekInsert
+		(TeamCode INT, 
+		GameWeek INT,
+		PlayerCode INT,
+		GameWeekPoints INT,
+		Multiplier INT,
+		TransferCost INT)
+
+	BULK INSERT #GameWeekInsert
+	FROM 'C:\FPL Database\Data Files\LastGameWeek.csv'
+	WITH (FORMATFILE = 'C:\FPL Database\Data Files\GameWeekFormatFile.xml',
+		CODEPAGE = 65001,
+		DATAFILETYPE = 'widenative')
+	SELECT * FROM #GameWeekInsert
+	--Insert individuall player gameweek point values
+	INSERT INTO PlayerGW
+		(PlayerId,
+		FPLTeamId,
+		GameWeek,
+		PlayerPoints,
+		Multiplier)
+	SELECT
+		p.PlayerId,
+		fpl.FPLTeamId,
+		[gwi].GameWeek,
+		[gwi].GameWeekPoints,
+		[gwi].Multiplier
+	FROM
+		#GameWeekInsert [gwi]
+			LEFT JOIN Players p ON [gwi].PlayerCode = p.ExternalCode
+			JOIN FPLTeams fpl ON [gwi].TeamCode = fpl.ExternalCode
+	WHERE
+		[gwi].GameWeek NOT IN (SELECT GameWeek FROM PlayerGW)
+	SELECT * FROM PlayerGW
+	--Insert FPL Team totals
+
+	INSERT INTO 
+		TeamGW
+			(GameWeek
+			,FPLTeamId
+			,GameWeekPoints
+			,TransferCosts)
+		SELECT
+			gwi.GameWeek,
+			fpl.FPLTeamId,
+			SUM((gwi.GameWeekPoints * gwi.Multiplier)),
+			tc.transferCost
+		FROM
+			#GameWeekInsert gwi
+			JOIN FPLTeams fpl ON gwi.TeamCode = fpl.ExternalCode
+			JOIN (
+				SELECT
+					gwi.GameWeek,
+					fpl.FPLTeamId,
+					MAX(gwi.TransferCost) AS transferCost
+				FROM
+					#GameWeekInsert gwi
+					JOIN FPLTeams fpl ON gwi.TeamCode = fpl.ExternalCode
+				GROUP BY
+					gwi.GameWeek,
+					fpl.FPLTeamId
+			) tc ON gwi.GameWeek = tc.GameWeek AND fpl.FPLTeamId = tc.FPLTeamId
+		GROUP BY
+			gwi.GameWeek,
+			fpl.FPLTeamId,
+			tc.transferCost
+		SELECT * FROM TeamGW
+	DROP TABLE #GameWeekInsert
